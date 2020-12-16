@@ -1,0 +1,57 @@
+class FixedHoloTimePickerDialog(context : Context, themeResId : Int, listener : OnTimeSetListener, hourOfDay : Int, minute : Int, is24HourView : Boolean) : TimePickerDialog(context, themeResId, listener, hourOfDay, minute,is24HourView) {
+
+    private fun findField(objectClass: Class<*>, fieldClass: Class<*>, expectedName: String): Field? {
+        try {
+            val field: Field = objectClass.getDeclaredField(expectedName)
+            field.isAccessible = true
+            return field
+        } catch (e: NoSuchFieldException) { /* Ignore */
+        }
+
+        // Search for it if it wasn't found under the expectedName.
+        for (field in objectClass.declaredFields) {
+            if (field.type === fieldClass) {
+                field.isAccessible = true
+                return field
+            }
+        }
+        return null
+    }
+
+    init {
+        if (Build.VERSION.SDK_INT == 24) {
+            try {
+                val field: Field? = findField(
+                    TimePickerDialog::class.java,
+                    TimePicker::class.java,
+                    "mTimePicker"
+                )
+                val datePicker = field?.get(this) as TimePicker
+                val delegateClass = Class.forName("android.widget.TimePicker\$TimePickerDelegate")
+                val delegateField: Field? = findField(
+                    TimePicker::class.java,
+                    delegateClass,
+                    "mDelegate"
+                )
+                val delegate = delegateField?.get(datePicker)
+                val spinnerDelegateClass = Class.forName("android.widget.TimePickerSpinnerDelegate")
+                if (delegate?.javaClass != spinnerDelegateClass) {
+                    delegateField?.set(datePicker, null)
+                    datePicker.removeAllViews()
+                    val spinnerDelegateConstructor =
+                        spinnerDelegateClass.getDeclaredConstructor(TimePicker::class.java, Context::class.java, AttributeSet::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    spinnerDelegateConstructor.isAccessible = true
+                    val spinnerDelegate: Any = spinnerDelegateConstructor.newInstance(
+                        datePicker,
+                        context,
+                        null,
+                        android.R.attr.timePickerStyle,
+                        0
+                    )
+                    delegateField?.set(datePicker, spinnerDelegate)
+                }
+            } catch (e: Exception) { /* Do nothing */
+            }
+        }
+    }
+}
